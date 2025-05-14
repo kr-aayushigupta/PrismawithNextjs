@@ -1,19 +1,29 @@
-// app/api/users/route.ts
+
 import { NextResponse } from 'next/server'
-import  prisma  from '@/lib/prisma'
+import { PrismaClient } from '@/generated/prisma'
+
+const prisma = new PrismaClient()
 
 export async function GET() {
-  const users = await prisma.user.findMany()
-  return NextResponse.json(users)
+  try {
+    const users = await prisma.user.findMany({
+      include: {
+        accounts: true,
+        sessions: true,
+      },
+    })
+
+    // MongoDB ObjectIds to strings
+    const safeUsers = users.map(user => ({
+      ...user,
+      id: user.id.toString(),
+      accounts: user.accounts.map(acc => ({ ...acc, id: acc.id.toString(), userId: acc.userId.toString() })),
+      sessions: user.sessions.map(sess => ({ ...sess, id: sess.id.toString(), userId: sess.userId.toString() })),
+    }))
+
+    return NextResponse.json(safeUsers)
+  } catch (err) {
+    return NextResponse.json({ error: 'Failed to load users' }, { status: 500 })
+  }
 }
 
-export async function POST(req: Request) {
-  const body = await req.json()
-  const newUser = await prisma.user.create({
-    data: {
-      name: body.name,
-      email: body.email,
-    },
-  })
-  return NextResponse.json(newUser)
-}
